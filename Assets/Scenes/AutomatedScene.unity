@@ -1956,6 +1956,7 @@ MonoBehaviour:
   arCamera: {fileID: 804668945}
   imageOut: {fileID: 633960309}
   useStoredCameraParameters: 1
+  inputGray: 1
   smoothingPoints: 20
   threshold: 15
   c: 0
@@ -7272,7 +7273,7 @@ MonoBehaviour:
         y: 0
         z: 0
       restrainRotation: {x: -90, y: 0, z: 0}
-  - ID: 4
+  - ID: 3
     tag:
       name: Blue Robot
       size: 0.07
@@ -9735,13 +9736,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df35b0c19ca97734e87299a664cea35f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _requestedDeviceName: 
+  _requestedDeviceName: 1
   _requestedWidth: 640
   _requestedHeight: 480
   _requestedIsFrontFacing: 0
   _requestedFPS: 30
   _rotate90Degree: 0
-  _flipVertical: 0
+  _flipVertical: 1
   _flipHorizontal: 0
   _outputColorFormat: 3
   _timeoutFrameCount: 300
@@ -12230,6 +12231,7 @@ MonoBehaviour:
   arCamera: {fileID: 624981190}
   imageOut: {fileID: 335798458}
   useStoredCameraParameters: 1
+  inputGray: 1
   smoothingPoints: 20
   threshold: 15
   c: 0
@@ -13565,12 +13567,13 @@ MonoBehaviour:
   FakeCameraObject: {fileID: 430292004}
   RealCameraObject: {fileID: 1229821836}
   mode: 2
-  debug: 1
+  debug: 0
   showRejectedCorners: 0
   applyEstimationPose: 1
   arCamera: {fileID: 1577277301}
   imageOut: {fileID: 2104123039}
   useStoredCameraParameters: 1
+  inputGray: 1
   smoothingPoints: 20
   threshold: 15
   c: 0

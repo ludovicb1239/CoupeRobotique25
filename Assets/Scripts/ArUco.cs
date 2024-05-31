@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Xml.Serialization;
 using System.IO;
@@ -12,12 +11,9 @@ using UnityEngine.Rendering;
 using OpenCVForUnityExample;
 using OpenCVForUnity.ImgprocModule;
 using System;
-using Unity.Burst.Intrinsics;
 using OpenCVForUnity.UnityUtils.Helper;
 using Unity.Collections;
-using System.Threading.Tasks;
 using System.Threading;
-using System.Runtime.InteropServices;
 
 public enum ArucoMode
 {
@@ -35,9 +31,6 @@ class ToRunOnMainThread
 }
 public class ArUco : MonoBehaviour
 {
-    /// <summary>
-    /// The image texture.
-    /// </summary>
     public RenderTexture imgTexture;
 
     public GameObject FakeCameraObject;
@@ -46,21 +39,9 @@ public class ArUco : MonoBehaviour
     public ArucoMode mode;
 
     [Space(10)]
-
     public bool debug = true;
-    /// <summary>
-    /// Determines if shows rejected corners.
-    /// </summary>
     public bool showRejectedCorners = false;
-
-    /// <summary>
-    /// Determines if applied the pose estimation.
-    /// </summary>
     public bool applyEstimationPose = false;
-
-    /// <summary>
-    /// The AR camera.
-    /// </summary>
     public Camera arCamera;
 
     [Space(10)]
@@ -72,27 +53,14 @@ public class ArUco : MonoBehaviour
     private int width;
     private int height;
 
-    /// <summary>
-    /// The cameraparam matrix.
-    /// </summary>
     Mat camMatrix;
-
-    /// <summary>
-    /// The distortion coeffs.
-    /// </summary>
     MatOfDouble distCoeffs;
-
-    /// <summary>
-    /// The detector parameters.
-    /// </summary>
     DetectorParameters detectorParams;
-
-    /// <summary>
-    /// The dictionary.
-    /// </summary>
     Dictionary dictionary;
 
     public bool useStoredCameraParameters;
+
+    public bool inputGray = true;
 
     public int smoothingPoints = 20;
     private int smoothingPointIdx;
@@ -108,22 +76,26 @@ public class ArUco : MonoBehaviour
 
     public SolarPanelManagerAuto solarPanelManager;
 
+    public Thread thread;
+
     // Start is called before the first frame update
     void Start()
     {
         FakeCameraObject.SetActive(mode == ArucoMode.FakeCamera);
         RealCameraObject.SetActive(mode == ArucoMode.RealCamera);
+        arCamera.enabled = debug && mode != ArucoMode.Disabled;
 
-        if (mode == ArucoMode.Disabled)
+        switch (mode)
+        {
+        case ArucoMode.Disabled:
             this.gameObject.SetActive(false);
-
-        if (mode == ArucoMode.FakeCamera)
-        {
-            InitializeFake();
-        }
-        else if (mode == ArucoMode.RealCamera)
-        {
+            break;
+        case ArucoMode.RealCamera:
             InitializeReal();
+            break;
+        case ArucoMode.FakeCamera:
+            InitializeFake();
+            break;
         }
     }
 
@@ -175,27 +147,37 @@ public class ArUco : MonoBehaviour
         }
         toRunOnMainThread = new();
 
-        if (mode == ArucoMode.FakeCamera)
+
+        switch (mode)
         {
+        case ArucoMode.FakeCamera:
             AsyncGPUReadback.Request(imgTexture, 0, OnReadbackComplete);
-        }
-        else
-        {
+            break;
+        case ArucoMode.RealCamera:
+
             if (WebCamHelper != null && WebCamHelper.IsPlaying() && WebCamHelper.DidUpdateThisFrame())
             {
-                Mat rgbaMat = WebCamHelper.GetMat();
-
-                Mat grayMat = new Mat(height, width, CvType.CV_8UC3); //8UC4 8UC3
-
-                Imgproc.cvtColor(rgbaMat, grayMat, Imgproc.COLOR_RGBA2GRAY);
-
-                rgbaMat.Dispose();
-
-                DetectMarkers(grayMat);
+                Mat mat = WebCamHelper.GetMat();
+                thread = new Thread(() => ProcessRealImageData(mat));
+                thread.Start();
             }
+            break;
         }
     }
 
+    void ProcessRealImageData(Mat mat)
+    {
+        if (!inputGray)
+        {
+            Mat grayMat = new Mat(height, width, CvType.CV_8UC3); //8UC4 8UC3
+            Imgproc.cvtColor(mat, grayMat, Imgproc.COLOR_RGBA2GRAY);
+            DetectMarkers(grayMat);
+        }
+        else
+        {
+            DetectMarkers(mat);
+        }
+    }
 
     void OnReadbackComplete(AsyncGPUReadbackRequest request)
     {
@@ -218,12 +200,7 @@ public class ArUco : MonoBehaviour
     }
     void ProcessReadbackData(NativeArray<byte> data)
     {
-        // Process the data, for example, convert it to a texture
-        // texture2.LoadRawTextureData(data);
-        // texture2.Apply();
-        // Utils.texture2DToMat(texture2, grayMat);
-
-        Mat grayMat = new Mat(height, width, CvType.CV_8UC3); //8UC4 8UC3
+        Mat grayMat = new Mat(height, width, CvType.CV_8UC1); //8UC4 8UC3
         Mat rgbaMat = new Mat(height, width, CvType.CV_8UC4); //8UC4 8UC3
 
         Utils.RawTextureDataToMat(data, rgbaMat, grayMat.width(), grayMat.height());
@@ -233,34 +210,18 @@ public class ArUco : MonoBehaviour
         data.Dispose();
 
         //Imgproc.adaptiveThreshold(grayMat, grayMat, 255, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY,(int)threshold, c);
-        //MainThreadDispatcher.RunOnMainThread(() =>
-        //{
-        //    Utils.matToTexture2D(grayMat, texture);
-        //});
 
-
-        //detectorParams.set_adaptiveThreshWinSizeMin(35);
-        //detectorParams.set_adaptiveThreshConstant(0);
         DetectMarkers(grayMat);
     }
     private void DetectMarkers(Mat mat)
     {
-        // ReadPixels looks at the active RenderTexture.
-        // RenderTexture.active = imgTexture;
-        // texture2.ReadPixels(new UnityEngine.Rect(0, 0, imgTexture.width, imgTexture.height), 0, 0);
-        // texture2.Apply();
-
-        //Imgproc.cvtColor(rgbaMat, grayMat, Imgproc.COLOR_RGBA2RGB);
-
-        //Utils.fastTexture2DToMat(texture2, grayMat);
-
         Mat ids = new Mat();
         List<Mat> corners = new List<Mat>();
         List<Mat> rejectedCorners = new List<Mat>();
 
         // detect markers.
         Aruco.detectMarkers(mat, dictionary, corners, ids, detectorParams, rejectedCorners, camMatrix, distCoeffs);
-        //Aruco.detectMarkers(grayMat, dictionary, corners, ids);
+
         // if at least one marker detected
         Debug.Log($"Found {ids.total()} tags");
         
@@ -286,7 +247,6 @@ public class ArUco : MonoBehaviour
         }
 
 
-        //Utils.fastMatToTexture2D(grayMat, texture);
         // MainThreadDispatcher.RunOnMainThread(() =>
         // {
         //     Utils.matToTexture2D(grayMat, texture);
@@ -295,9 +255,14 @@ public class ArUco : MonoBehaviour
         {
             if (showRejectedCorners && rejectedCorners.Count > 0)
                 Aruco.drawDetectedMarkers(mat, rejectedCorners, new Mat(), new Scalar(255, 0, 0));
-            Utils.matToTexture2D(mat, texture);
+
+            //TODO : Run on main thread
+            // Utils.matToTexture2D(mat, texture);
         }
-        mat.Dispose();
+
+        if (!inputGray)
+            mat.Dispose();
+
     }
     private void EstimatePoseCanonicalMarker(Mat rgbMat, ArUcoTag tag, int i, int id, List<Mat> corners)
     {
@@ -310,7 +275,7 @@ public class ArUco : MonoBehaviour
         using (Mat tvec = new Mat(tvecs, new OpenCVForUnity.CoreModule.Rect(0, i, 1, 1)))
         {
             // In this example we are processing with RGB color image, so Axis-color correspondences are X: blue, Y: green, Z: red. (Usually X: red, Y: green, Z: blue)
-            if (showRejectedCorners)
+            if (debug)
                 Calib3d.drawFrameAxes(rgbMat, camMatrix, distCoeffs, rvec, tvec, markerLength); // * 0.5f
 
             UpdateARObjectTransform(rvec, tvec, tag, id);
@@ -345,18 +310,18 @@ public class ArUco : MonoBehaviour
         Application.targetFrameRate = 30;
         width = imgTexture.width;
         height = imgTexture­.height;
+        FinishInitialize();
     }
     void InitializeReal()
     {
         WebCamHelper = RealCameraObject.GetComponent<WebCamTextureToMatHelper>();
         if (WebCamHelper != null)
         {
+            WebCamHelper.outputColorFormat = inputGray ? WebCamTextureToMatHelper.ColorFormat.GRAY : WebCamTextureToMatHelper.ColorFormat.RGBA;
+            Application.targetFrameRate = (int)WebCamHelper.requestedFPS;
             WebCamHelper.Initialize();
         }
-        else
-        {
-            throw new Exception("No webcamhelper!");
-        }
+        else throw new Exception("No webcamhelper!");
     }
     void FinishInitialize()
     {
@@ -464,6 +429,7 @@ public class ArUco : MonoBehaviour
 
         // TODO : detectorParams.set // useAruco3Detection Better detection
 
+        detectorParams.set_cornerRefinementMethod(Aruco.CORNER_REFINE_APRILTAG);
         // detectorParams.set_cornerRefinementMethod(1);
         // CORNER_REFINE_NONE = 0;
         // CORNER_REFINE_SUBPIX = 1;
@@ -535,7 +501,9 @@ public class ArUco : MonoBehaviour
         Vector3 average = sum / vectors.Length;
 
         return average;
-    }    // Method to calculate the average of an array of Quaternions
+    }    
+    
+    // Method to calculate the average of an array of Quaternions
     public Quaternion CalculateAverage(Quaternion[] quaternions)
     {
         if (quaternions == null || quaternions.Length == 0)
