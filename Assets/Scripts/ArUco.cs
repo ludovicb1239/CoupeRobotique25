@@ -67,9 +67,6 @@ public class ArUco : MonoBehaviour
     private Vector3[] smoothingPos;
     private Quaternion[] smoothingRot;
 
-    public double threshold;
-    public double c;
-
     public TextAsset xmlFile; // Reference to the XML file
 
     List<ToRunOnMainThread> toRunOnMainThread = new();
@@ -91,9 +88,11 @@ public class ArUco : MonoBehaviour
             this.gameObject.SetActive(false);
             break;
         case ArucoMode.RealCamera:
+            Initialize();
             InitializeReal();
             break;
         case ArucoMode.FakeCamera:
+            Initialize();
             InitializeFake();
             break;
         }
@@ -169,13 +168,17 @@ public class ArUco : MonoBehaviour
     {
         if (!inputGray)
         {
-            Mat grayMat = new Mat(height, width, CvType.CV_8UC3); //8UC4 8UC3
+            Mat grayMat = new Mat(height, width, CvType.CV_8UC1); //8UC4 8UC3
             Imgproc.cvtColor(mat, grayMat, Imgproc.COLOR_RGBA2GRAY);
             DetectMarkers(grayMat);
+            //grayMat.Dispose();
         }
         else
         {
-            DetectMarkers(mat);
+            Mat copyMat = new Mat(height, width, CvType.CV_8UC1);
+            mat.copyTo(copyMat);
+            DetectMarkers(copyMat);
+            //copyMat.Dispose();
         }
     }
 
@@ -246,23 +249,17 @@ public class ArUco : MonoBehaviour
             }
         }
 
-
-        // MainThreadDispatcher.RunOnMainThread(() =>
-        // {
-        //     Utils.matToTexture2D(grayMat, texture);
-        // });
         if (debug)
         {
             if (showRejectedCorners && rejectedCorners.Count > 0)
                 Aruco.drawDetectedMarkers(mat, rejectedCorners, new Mat(), new Scalar(255, 0, 0));
 
-            //TODO : Run on main thread
-            // Utils.matToTexture2D(mat, texture);
+            //Utils.matToTexture2DInRenderThread(mat, texture);
+            MainThreadDispatcher.instance.Enqueue(() =>
+            {
+                Utils.matToTexture2D(mat, texture);
+            });
         }
-
-        if (!inputGray)
-            mat.Dispose();
-
     }
     private void EstimatePoseCanonicalMarker(Mat rgbMat, ArUcoTag tag, int i, int id, List<Mat> corners)
     {
@@ -304,41 +301,13 @@ public class ArUco : MonoBehaviour
         mainThread.TagID = id;
         toRunOnMainThread.Add(mainThread);
     }
-
-    void InitializeFake()
+    void Initialize()
     {
-        Application.targetFrameRate = 30;
-        width = imgTexture.width;
-        height = imgTexture­.height;
-        FinishInitialize();
-    }
-    void InitializeReal()
-    {
-        WebCamHelper = RealCameraObject.GetComponent<WebCamTextureToMatHelper>();
-        if (WebCamHelper != null)
-        {
-            WebCamHelper.outputColorFormat = inputGray ? WebCamTextureToMatHelper.ColorFormat.GRAY : WebCamTextureToMatHelper.ColorFormat.RGBA;
-            Application.targetFrameRate = (int)WebCamHelper.requestedFPS;
-            WebCamHelper.Initialize();
-        }
-        else throw new Exception("No webcamhelper!");
-    }
-    void FinishInitialize()
-    {
-        texture2 = new Texture2D(width, height, TextureFormat.RGBA32, false);
-        texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
-        imageOut.texture = texture;
-
         // set camera parameters.
         double fx;
         double fy;
         double cx;
         double cy;
-
-        // string loadDirectoryPath = Path.Combine(Application.persistentDataPath, "ArUcoCameraCalibrationExample");
-        // string calibratonDirectoryName = "camera_parameters1280x720";
-        // string loadCalibratonFileDirectoryPath = Path.Combine(loadDirectoryPath, calibratonDirectoryName);
-        // string loadPath = Path.Combine(loadCalibratonFileDirectoryPath, calibratonDirectoryName + ".xml");
 
         if (useStoredCameraParameters && xmlFile != null)
         {
@@ -357,11 +326,16 @@ public class ArUco : MonoBehaviour
             cx = param.camera_matrix[2];
             cy = param.camera_matrix[5];
 
-            Debug.Log("Loaded CameraParameters from a stored XML file.");
+            width = param.image_width;
+            height = param.image_height;
 
+            Debug.Log("Loaded CameraParameters from a stored XML file.");
         }
         else
         {
+            width = 1920;
+            height = 1080;
+
             int max_d = (int)Mathf.Max(width, height);
             fx = max_d;
             fy = max_d;
@@ -383,6 +357,12 @@ public class ArUco : MonoBehaviour
 
             Debug.Log("Created a dummy CameraParameters.");
         }
+
+
+        texture2 = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        imageOut.texture = texture;
+
 
         Debug.Log("camMatrix " + camMatrix.dump());
         Debug.Log("distCoeffs " + distCoeffs.dump());
@@ -410,6 +390,12 @@ public class ArUco : MonoBehaviour
 
         // Display objects near the camera.
         arCamera.nearClipPlane = 0.01f;
+
+
+        arCamera.targetTexture.width = width;
+        arCamera.targetTexture.height = height;
+        // arCamera.activeTexture.width = width;
+        // arCamera.activeTexture.height = height;
 
 
 
@@ -445,16 +431,28 @@ public class ArUco : MonoBehaviour
         smoothingRot = new Quaternion[smoothingPoints];
     }
 
+    void InitializeFake()
+    {
+        Application.targetFrameRate = 30;
+        width = imgTexture.width;
+        height = imgTexture­.height;
+    }
+    void InitializeReal()
+    {
+        WebCamHelper = RealCameraObject.GetComponent<WebCamTextureToMatHelper>();
+        if (WebCamHelper != null)
+        {
+            WebCamHelper.outputColorFormat = inputGray ? WebCamTextureToMatHelper.ColorFormat.GRAY : WebCamTextureToMatHelper.ColorFormat.RGBA;
+            WebCamHelper.requestedWidth = width;
+            WebCamHelper.requestedHeight = height;
+            WebCamHelper.Initialize();
+        }
+        else throw new Exception("No webcamhelper!");
+    }
+
     public void OnWebCamTextureToMatHelperInitialized()
     {
         Debug.Log("OnWebCamTextureToMatHelperInitialized");
-
-        Mat webCamTextureMat = WebCamHelper.GetMat();
-
-        width = webCamTextureMat.width();
-        height = webCamTextureMat.height();
-
-        FinishInitialize();
     }
 
     public void OnWebCamTextureToMatHelperDisposed()

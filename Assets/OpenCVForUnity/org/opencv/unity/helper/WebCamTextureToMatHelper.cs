@@ -41,7 +41,6 @@ namespace OpenCVForUnity.UnityUtils.Helper
         /// <summary>
         /// Set the width of camera.
         /// </summary>
-        [SerializeField, FormerlySerializedAs("requestedWidth"), TooltipAttribute("Set the width of camera.")]
         protected int _requestedWidth = 640;
 
         public virtual int requestedWidth
@@ -62,7 +61,6 @@ namespace OpenCVForUnity.UnityUtils.Helper
         /// <summary>
         /// Set the height of camera.
         /// </summary>
-        [SerializeField, FormerlySerializedAs("requestedHeight"), TooltipAttribute("Set the height of camera.")]
         protected int _requestedHeight = 480;
 
         public virtual int requestedHeight
@@ -174,7 +172,6 @@ namespace OpenCVForUnity.UnityUtils.Helper
         /// <summary>
         /// Select the output color format.
         /// </summary>
-        [SerializeField, FormerlySerializedAs("outputColorFormat"), TooltipAttribute("Select the output color format.")]
         protected ColorFormat _outputColorFormat = ColorFormat.RGBA;
 
         public virtual ColorFormat outputColorFormat

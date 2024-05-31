@@ -700,6 +700,27 @@ namespace OpenCVForUnity.UnityUtils
 
             GL.IssuePluginEvent(OpenCVForUnity_GetRenderEventFunc(), 1);
         }
+        public static void matToTexture2DInRenderThread(Mat mat, Texture2D texture)
+        {
+            if (mat == null)
+                throw new ArgumentNullException("mat");
+            if (mat != null)
+                mat.ThrowIfDisposed();
+
+            if (texture == null)
+                throw new ArgumentNullException("texture");
+
+            //if (mat.cols() != texture.width || mat.rows() != texture.height)
+                //throw new ArgumentException("The Texture object must have the same size.");
+
+            if (!mat.isContinuous())
+                throw new ArgumentException("mat.isContinuous() must be true.");
+
+            OpenCVForUnity_SetByteArrayFromUnity((IntPtr)mat.dataAddr(), mat.width(), mat.height(), (int)mat.elemSize());
+            OpenCVForUnity_SetTextureFromUnity(texture.GetNativeTexturePtr(), texture.width, texture.height, 4);
+
+            GL.IssuePluginEvent(OpenCVForUnity_GetRenderEventFunc(), 1);
+        }
 
         /**
         * Gets the readable path of a file in the "StreamingAssets" folder.
